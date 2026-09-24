@@ -40,3 +40,19 @@ Thumbs.db
 
 # ── Uploads ──────────────────────────────────────────────────────────────────
 backend/uploads/
+
+# ── Scratch / debug scripts (auto-generated during development) ────────────
+*.sh
+fix_*.py
+fix_*.js
+update_*.py
+update_*.js
+add_*.py
+test_*.py
+test_*.js
+admin_token.txt
+tenant_token.txt
+token.txt
+ticket_id.txt
+test_board.js
+backend/test_*.py
