@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { getTickets, createTicket, updateTicketStatus, assignTicket, getTicketStats, getMyTickets } from '../services/maintenanceApi';
+import { getTickets, createTicket, updateTicket, assignTicket, getTicketStats, getMyTickets } from '../services/maintenanceApi';
 import Modal from '../components/common/Modal';
 import StatusBadge from '../components/common/StatusBadge';
 import EmptyState from '../components/common/EmptyState';
@@ -23,7 +23,7 @@ export default function MaintenancePage() {
 
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [statusForm, setStatusForm] = useState({ status: '', resolution_notes: '', actual_cost: '' });
+  const [statusForm, setStatusForm] = useState({ status: '', priority: '', resolution_notes: '', actual_cost: '' });
 
   const fetchData = async () => {
     setLoading(true);
@@ -62,7 +62,10 @@ export default function MaintenancePage() {
   const handleUpdateStatus = async (e) => {
     e.preventDefault();
     try {
-      await updateTicketStatus(selectedTicket.id, statusForm);
+      const payload = { ...statusForm };
+      if (!payload.actual_cost) delete payload.actual_cost;
+      else payload.actual_cost = parseFloat(payload.actual_cost);
+      await updateTicket(selectedTicket.id, payload);
       toast.success('Status updated');
       setIsDetailModalOpen(false);
       fetchData();
@@ -74,7 +77,8 @@ export default function MaintenancePage() {
   const openDetail = (ticket) => {
     setSelectedTicket(ticket);
     setStatusForm({
-      status: ticket.status,
+      status: ticket.status.toLowerCase(),
+      priority: ticket.priority.toLowerCase(),
       resolution_notes: ticket.resolution_notes || '',
       actual_cost: ticket.actual_cost || ''
     });
@@ -122,7 +126,7 @@ export default function MaintenancePage() {
           isAdminOrLandlord && viewMode === 'board' ? (
             <div className="ticket-board">
               {columns.map(col => {
-                const colTickets = tickets.filter(t => t.status === col);
+                const colTickets = tickets.filter(t => t.status.toLowerCase() === col);
                 return (
                   <div key={col} className="ticket-column">
                     <div className="ticket-column__header">
@@ -223,14 +227,38 @@ export default function MaintenancePage() {
       {selectedTicket && (
         <Modal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} title="Ticket Details">
           <div style={{marginBottom: 'var(--spacing-lg)'}}>
-            <h4>{selectedTicket.title}</h4>
-            <p style={{color: 'var(--color-text-muted)', fontSize: '14px'}}>{selectedTicket.description}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+               <h4 style={{ margin: 0, paddingRight: '12px' }}>{selectedTicket.title}</h4>
+               <StatusBadge value={selectedTicket.status} />
+            </div>
+            <p style={{color: 'var(--color-text-muted)', fontSize: '14px', marginTop: '8px'}}>{selectedTicket.description}</p>
+            
+            <div style={{ display: 'flex', gap: '24px', marginTop: '16px', padding: '16px', background: 'var(--color-bg)', borderRadius: '8px', flexWrap: 'wrap' }}>
+              <div><div style={{fontSize: '11px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: '4px'}}>Category</div><span style={{textTransform: 'capitalize'}}>{selectedTicket.category.replace('_', ' ')}</span></div>
+              <div><div style={{fontSize: '11px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: '4px'}}>Priority</div><StatusBadge value={selectedTicket.priority} /></div>
+              {selectedTicket.actual_cost != null && (
+                <div><div style={{fontSize: '11px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: '4px'}}>Final Cost</div><span style={{color: 'var(--color-success)', fontWeight: 700}}>KES {selectedTicket.actual_cost.toLocaleString()}</span></div>
+              )}
+              {selectedTicket.resolution_notes && (
+                <div style={{width: '100%'}}><div style={{fontSize: '11px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: '4px'}}>Resolution Notes</div><span style={{fontSize: '13px'}}>{selectedTicket.resolution_notes}</span></div>
+              )}
+            </div>
           </div>
           
           {isAdminOrLandlord ? (
             <form onSubmit={handleUpdateStatus}>
-              <div className="form-group">
-                <label className="form-label">Update Status</label>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label">Priority</label>
+                  <select className="form-control" value={statusForm.priority} onChange={e => setStatusForm({...statusForm, priority: e.target.value})}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Update Status</label>
                 <select className="form-control" value={statusForm.status} onChange={e => setStatusForm({...statusForm, status: e.target.value})}>
                   <option value="open">Open</option>
                   <option value="in_progress">In Progress</option>
@@ -238,6 +266,7 @@ export default function MaintenancePage() {
                   <option value="resolved">Resolved</option>
                   <option value="closed">Closed</option>
                 </select>
+              </div>
               </div>
               <div className="form-group">
                 <label className="form-label">Resolution Notes</label>
@@ -251,14 +280,7 @@ export default function MaintenancePage() {
                 <button type="submit" className="btn btn--primary">Save Updates</button>
               </div>
             </form>
-          ) : (
-            <div>
-              <p><strong>Status:</strong> <StatusBadge value={selectedTicket.status} /></p>
-              {selectedTicket.resolution_notes && (
-                <p><strong>Notes:</strong> {selectedTicket.resolution_notes}</p>
-              )}
-            </div>
-          )}
+          ) : null}
         </Modal>
       )}
     </div>

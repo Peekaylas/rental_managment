@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { getPayments, createPaymentEntry, recordPayment, getLedgerSummary, getOverduePayments, getMyPayments } from '../services/paymentApi';
+import { getPayments, createPaymentEntry, recordPayment, getLedgerSummary, getOverduePayments, getMyPayments, submitPayment, reviewPayment } from '../services/paymentApi';
 import Modal from '../components/common/Modal';
 import StatusBadge from '../components/common/StatusBadge';
 import EmptyState from '../components/common/EmptyState';
@@ -24,6 +24,11 @@ export default function PaymentsPage() {
   });
 
   const [isChargeModalOpen, setIsChargeModalOpen] = useState(false);
+  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [submitForm, setSubmitForm] = useState({
+    amount_paid: '', payment_date: new Date().toISOString().split('T')[0],
+    payment_method: 'mpesa', transaction_reference: '', receipt_url: '', notes: ''
+  });
   const [chargeForm, setChargeForm] = useState({
     lease_id: '', amount_due: '', due_date: '', period_start: '', period_end: '', notes: ''
   });
@@ -55,6 +60,49 @@ export default function PaymentsPage() {
     fetchData();
   }, [activeTab, isAdminOrLandlord]);
 
+  
+  
+  const [reviewReason, setReviewReason] = useState('');
+  const [selectedReview, setSelectedReview] = useState(null);
+  
+  const handleReviewAction = async (id, action) => {
+    if (action === 'reject' && !selectedReview) {
+      setSelectedReview(id);
+      return;
+    }
+    
+    try {
+      await reviewPayment(id, action, reviewReason);
+      setReviewReason('');
+      setSelectedReview(null);
+      fetchData();
+      toast.success("Payment reviewed successfully");
+    } catch(err) {
+      toast.error("Failed to review payment");
+    }
+  };
+
+  const openSubmitModal = (id, amount) => {
+    setSelectedPaymentId(id);
+    setSubmitForm({ ...submitForm, amount_paid: amount });
+    setIsSubmitModalOpen(true);
+  };
+
+  const handleTenantSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await submitPayment(selectedPaymentId, {
+        ...submitForm,
+        amount_paid: parseFloat(submitForm.amount_paid)
+      });
+      toast.success("Payment submitted for review");
+      setIsSubmitModalOpen(false);
+      fetchData();
+    } catch(err) {
+      toast.error("Failed to submit payment");
+    }
+  };
+
   const handleRecordSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -85,7 +133,45 @@ export default function PaymentsPage() {
         <div className="page-header__left">
           <h2>Payments</h2>
         </div>
-        {isAdminOrLandlord && (
+        
+      {/* Tenant Submit Payment Modal */}
+      <Modal isOpen={isSubmitModalOpen} onClose={() => setIsSubmitModalOpen(false)} title="Submit Payment">
+        <form onSubmit={handleTenantSubmit}>
+          <div className="form-group">
+            <label className="form-label">Amount Paid</label>
+            <input required type="number" className="form-control" value={submitForm.amount_paid} onChange={e => setSubmitForm({...submitForm, amount_paid: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Payment Date</label>
+            <input required type="date" className="form-control" value={submitForm.payment_date} onChange={e => setSubmitForm({...submitForm, payment_date: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Method</label>
+            <select className="form-control" value={submitForm.payment_method} onChange={e => setSubmitForm({...submitForm, payment_method: e.target.value})}>
+              <option value="mpesa">M-Pesa</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="cash">Cash</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Transaction/Reference Code</label>
+            <input required type="text" className="form-control" value={submitForm.transaction_reference} onChange={e => setSubmitForm({...submitForm, transaction_reference: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Receipt/Proof URL (Optional)</label>
+            <input type="text" className="form-control" placeholder="https://..." value={submitForm.receipt_url} onChange={e => setSubmitForm({...submitForm, receipt_url: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Notes (Optional)</label>
+            <textarea className="form-control" rows="2" value={submitForm.notes} onChange={e => setSubmitForm({...submitForm, notes: e.target.value})}></textarea>
+          </div>
+          <div style={{marginTop: 'var(--spacing-lg)', textAlign: 'right'}}>
+            <button type="submit" className="btn btn--primary">Submit for Review</button>
+          </div>
+        </form>
+      </Modal>
+
+      {isAdminOrLandlord && (
           <button className="btn btn--primary" onClick={() => {
             setChargeForm({lease_id: '', amount_due: '', due_date: '', period_start: '', period_end: '', notes: ''});
             setIsChargeModalOpen(true);
@@ -149,15 +235,39 @@ export default function PaymentsPage() {
                     <td style={{fontWeight: 600, color: parseFloat(p.balance) > 0 ? 'var(--color-danger)' : 'var(--color-success)'}}>
                       KES {parseFloat(p.balance).toLocaleString()}
                     </td>
-                    <td><StatusBadge value={p.status} /></td>
+                    <td>
+                      <div style={{display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between'}}>
+                        <StatusBadge value={p.status} />
+                        {!isAdminOrLandlord && ['pending', 'partial', 'failed', 'overdue'].includes(p.status) && (
+                          <button className="btn btn--primary btn--sm" onClick={() => openSubmitModal(p.id, p.balance)}>Pay Now</button>
+                        )}
+                      </div>
+                    </td>
                     {isAdminOrLandlord && (
                       <td className="actions-col">
-                        {p.status !== 'completed' && (
-                          <button className="btn btn--sm btn--outline" onClick={() => {
-                            setSelectedPaymentId(p.id);
-                            setRecordForm({...recordForm, amount_paid: p.balance});
-                            setIsRecordModalOpen(true);
-                          }}>Record</button>
+                        {p.status === 'under_review' ? (
+                          selectedReview === p.id ? (
+                            <div style={{display: 'flex', gap: '4px', justifyContent: 'flex-end', flexDirection: 'column'}}>
+                              <input type="text" placeholder="Reason..." className="form-control" style={{padding: '4px', fontSize: '11px'}} value={reviewReason} onChange={e=>setReviewReason(e.target.value)} />
+                              <div style={{display: 'flex', gap: '4px'}}>
+                                <button className="btn btn--danger btn--sm" style={{flex: 1}} onClick={() => handleReviewAction(p.id, 'reject')}>Confirm</button>
+                                <button className="btn btn--ghost btn--sm" onClick={() => setSelectedReview(null)}>X</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{display: 'flex', gap: '4px', justifyContent: 'flex-end'}}>
+                              <button className="btn btn--success btn--sm" onClick={() => handleReviewAction(p.id, 'approve')}>Approve</button>
+                              <button className="btn btn--outline btn--sm" onClick={() => handleReviewAction(p.id, 'reject')}>Reject</button>
+                            </div>
+                          )
+                        ) : (
+                          p.status !== 'completed' && (
+                            <button className="btn btn--sm btn--outline" onClick={() => {
+                              setSelectedPaymentId(p.id);
+                              setRecordForm({...recordForm, amount_paid: p.balance});
+                              setIsRecordModalOpen(true);
+                            }}>Record Manual</button>
+                          )
                         )}
                       </td>
                     )}

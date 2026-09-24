@@ -425,3 +425,5 @@
 @keyframes spinner {
   to { transform: rotate(360deg); }
 }
+
+.badge--under_review { background:#fff3cd; color:#856404; font-weight: 600; border: 1px solid #ffeeba; }

@@ -144,7 +144,7 @@ export default function LeasesPage() {
               <tbody>
                 {leases.map(lease => (
                   <tr key={lease.id}>
-                    <td>{lease.tenant?.full_name}</td>
+                    <td>{lease.tenant?.user?.full_name || "Unknown Tenant"}</td>
                     <td>{lease.unit?.property_name} - {lease.unit?.unit_number}</td>
                     <td>
                       <div style={{fontSize: '12px'}}>{new Date(lease.start_date).toLocaleDateString()} - {new Date(lease.end_date).toLocaleDateString()}</div>
