@@ -48,11 +48,14 @@ class TicketUpdate(BaseModel):
     resolution_notes: Optional[str] = None
     estimated_cost: Optional[float] = None
     actual_cost: Optional[float] = None
+    # Cost accountability: landlord toggles whether tenant is at fault
+    is_tenant_fault: Optional[bool] = None
 
 class TicketStatusUpdate(BaseModel):
     status: TicketStatus
     resolution_notes: Optional[str] = None
     actual_cost: Optional[float] = None
+    is_tenant_fault: Optional[bool] = None
 
 class UnitBasic(BaseModel):
     unit_number: str
@@ -76,6 +79,8 @@ class TicketResponse(TicketBase):
     resolution_notes: Optional[str]
     estimated_cost: Optional[float]
     actual_cost: Optional[float]
+    is_tenant_fault: bool = False
+    is_billed_to_tenant: bool = False
     unit: UnitBasic
     reported_by: Optional[UserBasic] = None
     assigned_to: Optional[UserBasic] = None

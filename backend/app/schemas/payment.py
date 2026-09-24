@@ -12,6 +12,7 @@ class PaymentMethod(str, Enum):
 
 class PaymentStatus(str, Enum):
     pending = "pending"
+    under_review = "under_review"
     completed = "completed"
     failed = "failed"
     refunded = "refunded"
@@ -79,3 +80,15 @@ class LedgerSummary(BaseModel):
     paid_count: int
     pending_count: int
     partial_count: int
+
+class TenantPaymentSubmit(BaseModel):
+    amount_paid: float = Field(..., gt=0.0)
+    payment_date: date
+    payment_method: PaymentMethod
+    transaction_reference: str
+    receipt_url: Optional[str] = None
+    notes: Optional[str] = None
+
+class PaymentReview(BaseModel):
+    action: str = Field(..., pattern="^(approve|reject)$")
+    rejection_reason: Optional[str] = None
