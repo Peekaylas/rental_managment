@@ -1,5 +1,6 @@
 """
 User model — supports three roles: Admin, Landlord, Tenant.
+Includes invite_token for secure tenant onboarding.
 """
 import enum
 
@@ -41,6 +42,16 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # ── Invite / Onboarding ──────────────────────────────────────────────
+    # A signed token sent to the tenant's email so they can claim their account
+    # and set their own password. Cleared after first use.
+    invite_token: Mapped[str | None] = mapped_column(
+        String(512), nullable=True, unique=True, index=True
+    )
+    # Marks whether this account was auto-created via the landlord invitation
+    # flow and still needs the tenant to claim it.
+    is_claimed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # ── Relationships ─────────────────────────────────────────────────────
     owned_properties: Mapped[list["Property"]] = relationship(

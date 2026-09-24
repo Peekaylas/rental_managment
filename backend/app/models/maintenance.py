@@ -3,7 +3,7 @@ MaintenanceTicket model — tenant-raised repair/service requests.
 """
 import enum
 
-from sqlalchemy import Enum, ForeignKey, String, Text
+from sqlalchemy import Boolean, Enum, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -93,9 +93,20 @@ class MaintenanceTicket(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     # ── Resolution ────────────────────────────────────────────────────────
     resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    estimated_cost: Mapped[float | None] = mapped_column(nullable=True)
-    actual_cost: Mapped[float | None] = mapped_column(nullable=True)
+    estimated_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # ── Cost Accountability ───────────────────────────────────────────────
+    # When True, the repair cost is billable to the tenant's next invoice.
+    # When False (default), the cost is absorbed as an internal property expense.
+    is_tenant_fault: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    # Set to True once the cost has been billed to a rent payment.
+    is_billed_to_tenant: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
     def __repr__(self) -> str:
         return (
