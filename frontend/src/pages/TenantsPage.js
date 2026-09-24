@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { getTenants, createTenant, updateTenant, getMyTenantProfile } from '../services/tenantApi';
+import { getTenants, updateTenant, getMyTenantProfile } from '../services/tenantApi';
+import apiClient from '../services/apiClient';
 import Modal from '../components/common/Modal';
 import StatusBadge from '../components/common/StatusBadge';
 import EmptyState from '../components/common/EmptyState';
@@ -19,8 +20,10 @@ export default function TenantsPage() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState(null);
+  const [inviteResult, setInviteResult] = useState(null); // holds the generated token after invite
   const [form, setForm] = useState({
-    user_id: '', national_id: '', date_of_birth: '', phone_number: '',
+    invite_name: '', invite_email: '', invite_phone: '',
+    national_id: '', date_of_birth: '',
     employment_status: 'employed', employer_name: '', monthly_income: '',
     emergency_contact_name: '', emergency_contact_phone: '', notes: ''
   });
@@ -50,7 +53,7 @@ export default function TenantsPage() {
     if (tenant) {
       setEditingTenant(tenant);
       setForm({
-        user_id: tenant.user_id,
+        invite_name: '', invite_email: '', invite_phone: '',
         national_id: tenant.national_id || '',
         date_of_birth: tenant.date_of_birth ? tenant.date_of_birth.split('T')[0] : '',
         employment_status: tenant.employment_status || 'employed',
@@ -62,8 +65,10 @@ export default function TenantsPage() {
       });
     } else {
       setEditingTenant(null);
+      setInviteResult(null);
       setForm({
-        user_id: '', national_id: '', date_of_birth: '',
+        invite_name: '', invite_email: '', invite_phone: '',
+        national_id: '', date_of_birth: '',
         employment_status: 'employed', employer_name: '', monthly_income: '',
         emergency_contact_name: '', emergency_contact_phone: '', notes: ''
       });
@@ -75,16 +80,36 @@ export default function TenantsPage() {
     e.preventDefault();
     try {
       if (editingTenant) {
-        await updateTenant(editingTenant.id, form);
-        toast.success('Tenant updated');
+        // Editing existing profile — update fields only
+        await updateTenant(editingTenant.id, {
+          national_id: form.national_id,
+          date_of_birth: form.date_of_birth || null,
+          employment_status: form.employment_status,
+          employer_name: form.employer_name,
+          monthly_income: form.monthly_income ? parseFloat(form.monthly_income) : null,
+          emergency_contact_name: form.emergency_contact_name,
+          emergency_contact_phone: form.emergency_contact_phone,
+          notes: form.notes,
+        });
+        toast.success('Tenant profile updated');
+        setIsModalOpen(false);
+        fetchData();
       } else {
-        await createTenant(form);
-        toast.success('Tenant profile created');
+        // New tenant — send an invite, then show the token
+        if (!form.invite_name.trim() || !form.invite_email.trim()) {
+          toast.error('Name and email are required to invite a tenant.');
+          return;
+        }
+        const res = await apiClient.post('/invites/', {
+          email: form.invite_email.trim().toLowerCase(),
+          full_name: form.invite_name.trim(),
+          phone_number: form.invite_phone || null,
+        });
+        setInviteResult(res.data);
+        fetchData();
       }
-      setIsModalOpen(false);
-      fetchData();
     } catch (err) {
-      toast.error(err.friendlyMessage || 'Error saving tenant');
+      toast.error(err.response?.data?.detail || err.friendlyMessage || 'Error saving tenant');
     }
   };
 
@@ -235,14 +260,44 @@ export default function TenantsPage() {
         )}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingTenant ? "Edit Tenant" : "Add Tenant"} size="wide">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingTenant ? "Edit Tenant Profile" : "Invite New Tenant"} size="wide">
         <form onSubmit={handleSubmit}>
           <div className="form-grid">
             {!editingTenant && (
-              <div className="form-group col-span-2">
-                <label className="form-label">User ID (UUID of existing user)</label>
-                <input required className="form-control" value={form.user_id} onChange={e => setForm({...form, user_id: e.target.value})} />
+              <div className="col-span-2" style={{
+                background: 'var(--color-bg)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--spacing-md)',
+                marginBottom: 'var(--spacing-md)'
+              }}>
+                <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, marginBottom: 4 }}>
+                  ✉️ How this works
+                </p>
+                <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)', margin: 0 }}>
+                  Enter the tenant's name and email below. The system will create their account and generate a secure invite token. Share that token with them — they use it on the Register page to set their own password and activate their account.
+                </p>
               </div>
+            )}
+            {!editingTenant && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Tenant Full Name *</label>
+                  <input required className="form-control" placeholder="e.g. Jane Mwangi"
+                    value={form.invite_name || ''} onChange={e => setForm({...form, invite_name: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Tenant Email *</label>
+                  <input required type="email" className="form-control" placeholder="jane@example.com"
+                    value={form.invite_email || ''} onChange={e => setForm({...form, invite_email: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Phone Number (optional)</label>
+                  <input className="form-control" placeholder="+254 7XX XXX XXX"
+                    value={form.invite_phone || ''} onChange={e => setForm({...form, invite_phone: e.target.value})} />
+                </div>
+                <div className="form-group" />
+              </>
             )}
             <div className="form-group">
               <label className="form-label">National ID</label>
@@ -283,9 +338,44 @@ export default function TenantsPage() {
               <textarea className="form-control" rows="2" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})}></textarea>
             </div>
           </div>
-          <div style={{marginTop: 'var(--spacing-lg)', textAlign: 'right'}}>
-            <button type="submit" className="btn btn--primary">Save</button>
-          </div>
+
+          {/* Show invite token result after successful invite creation */}
+          {inviteResult ? (
+            <div style={{
+              background: '#e6f9ef', border: '1px solid #27ae60', borderRadius: 'var(--radius-md)',
+              padding: 'var(--spacing-lg)', marginTop: 'var(--spacing-lg)'
+            }}>
+              <p style={{ fontWeight: 700, color: '#1a6b3c', marginBottom: 8 }}>
+                ✅ Invite sent for {inviteResult.message.split('for ')[1]?.split('.')[0]}
+              </p>
+              <p style={{ fontSize: 'var(--font-size-sm)', color: '#2d6a4f', marginBottom: 12 }}>
+                Share this token with the tenant. They paste it on the Register page under "I Have an Invite" to set their password and activate their account.
+              </p>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <code style={{
+                  flex: 1, background: 'white', border: '1px solid #27ae60',
+                  borderRadius: 6, padding: '8px 12px', fontSize: 12,
+                  wordBreak: 'break-all', fontFamily: 'monospace'
+                }}>
+                  {inviteResult.invite_token}
+                </code>
+                <button type="button" className="btn btn--outline btn--sm"
+                  onClick={() => { navigator.clipboard.writeText(inviteResult.invite_token); toast.success('Token copied!'); }}>
+                  Copy
+                </button>
+              </div>
+              <button type="button" className="btn btn--primary" style={{ marginTop: 16, width: '100%' }}
+                onClick={() => setIsModalOpen(false)}>
+                Done
+              </button>
+            </div>
+          ) : (
+            <div style={{ marginTop: 'var(--spacing-lg)', textAlign: 'right' }}>
+              <button type="submit" className="btn btn--primary">
+                {editingTenant ? 'Save Changes' : '✉️ Send Invite'}
+              </button>
+            </div>
+          )}
         </form>
       </Modal>
     </div>
