@@ -12,8 +12,10 @@ router = APIRouter(prefix="/maintenance", tags=["Maintenance"])
 @router.get("/", response_model=List[TicketResponse])
 def list_tickets(unit_id: str = None, status: str = None, priority: str = None, db: Session = Depends(get_db), current_user: User = Depends(require_any_role)):
     role = getattr(current_user.role, 'value', str(current_user.role))
-    if role in ["admin", "landlord"]:
+    if role == "admin":
         return maintenance_service.list_tickets(db, unit_id=unit_id, status=status, priority=priority)
+    elif role == "landlord":
+        return maintenance_service.list_tickets(db, owner_id=current_user.id, unit_id=unit_id, status=status, priority=priority)
     else:
         return maintenance_service.list_tickets(db, reported_by_id=current_user.id, status=status, priority=priority)
 
@@ -23,7 +25,9 @@ def create_ticket(payload: TicketCreate, db: Session = Depends(get_db), current_
 
 @router.get("/stats", response_model=TicketStats)
 def get_ticket_stats(db: Session = Depends(get_db), current_user: User = Depends(require_landlord_or_admin)):
-    return maintenance_service.get_ticket_stats(db)
+    role = getattr(current_user.role, 'value', str(current_user.role))
+    owner_id = current_user.id if role == "landlord" else None
+    return maintenance_service.get_ticket_stats(db, owner_id=owner_id)
 
 @router.get("/my-tickets", response_model=List[TicketResponse])
 def get_my_tickets(db: Session = Depends(get_db), current_user: User = Depends(require_any_role)):

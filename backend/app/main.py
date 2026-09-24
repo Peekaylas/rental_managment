@@ -16,6 +16,8 @@ from app.api.v1.endpoints import (
     leases,
     payments,
     maintenance,
+    dashboard,
+    invites,
 )
 
 
@@ -56,6 +58,8 @@ def create_app() -> FastAPI:
     app.include_router(leases.router,      prefix="/api/v1",             tags=["Leases"])
     app.include_router(payments.router,    prefix="/api/v1",             tags=["Payments"])
     app.include_router(maintenance.router, prefix="/api/v1",             tags=["Maintenance"])
+    app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+    app.include_router(invites.router,     prefix="/api/v1",             tags=["Invitations"])
 
     return app
 
