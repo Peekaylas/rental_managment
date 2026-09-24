@@ -1,14 +1,17 @@
 from sqlalchemy.orm import Session, joinedload
 from app.models.maintenance import MaintenanceTicket
-from app.models.property import Unit
+from app.models.property import Unit, Property
 from app.schemas.maintenance import TicketCreate, TicketUpdate, TicketStatusUpdate, TicketStatus
 from app.schemas.property import UnitStatus
 
 class TicketNotFoundError(Exception):
     pass
 
-def list_tickets(db: Session, unit_id: str = None, status: str = None, priority: str = None, reported_by_id: str = None, skip: int = 0, limit: int = 50) -> list[MaintenanceTicket]:
-    query = db.query(MaintenanceTicket).options(joinedload(MaintenanceTicket.unit), joinedload(MaintenanceTicket.reported_by), joinedload(MaintenanceTicket.assigned_to))
+def list_tickets(db: Session, unit_id: str = None, status: str = None, priority: str = None, reported_by_id: str = None, owner_id: str = None, skip: int = 0, limit: int = 50) -> list[MaintenanceTicket]:
+    query = db.query(MaintenanceTicket)
+    
+    if owner_id:
+        query = query.join(Unit, MaintenanceTicket.unit_id == Unit.id).join(Property, Unit.property_id == Property.id).filter(Property.owner_id == owner_id).options(joinedload(MaintenanceTicket.unit), joinedload(MaintenanceTicket.reported_by), joinedload(MaintenanceTicket.assigned_to))
     if unit_id:
         query = query.filter(MaintenanceTicket.unit_id == unit_id)
     if status:
@@ -61,8 +64,11 @@ def update_ticket_status(db: Session, ticket: MaintenanceTicket, payload: Ticket
     db.refresh(ticket)
     return ticket
 
-def get_ticket_stats(db: Session) -> dict:
-    tickets = db.query(MaintenanceTicket.status, MaintenanceTicket.priority, MaintenanceTicket.category).all()
+def get_ticket_stats(db: Session, owner_id: str = None) -> dict:
+    query = db.query(MaintenanceTicket.status, MaintenanceTicket.priority, MaintenanceTicket.category)
+    if owner_id:
+        query = query.join(Unit, MaintenanceTicket.unit_id == Unit.id).join(Property, Unit.property_id == Property.id).filter(Property.owner_id == owner_id)
+    tickets = query.all()
     stats = {
         "open_count": 0,
         "in_progress_count": 0,
