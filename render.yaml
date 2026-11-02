@@ -8,6 +8,8 @@ services:
     plan: free
     autoDeploy: true
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: APP_NAME
         value: "Affordable Housing & Rental Management System"
       - key: APP_ENV
